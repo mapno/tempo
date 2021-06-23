@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -112,6 +113,8 @@ func dumpBlock(r tempodb_backend.Reader, c tempodb_backend.Compactor, tenantID s
 			} else if err != nil {
 				return err
 			}
+
+			fmt.Printf("ID: %10v\n", hex.EncodeToString(objID))
 
 			if len(obj) > maxObjSize {
 				maxObjSize = len(obj)
