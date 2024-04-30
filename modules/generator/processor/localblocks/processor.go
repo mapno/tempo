@@ -634,7 +634,13 @@ func (p *Processor) writeHeadBlock(id common.ID, tr *tempopb.Trace) error {
 }
 
 func (p *Processor) resetHeadBlock() error {
-	block, err := p.wal.NewBlockWithDedicatedColumns(uuid.New(), p.tenant, model.CurrentEncoding, p.overrides.DedicatedColumns(p.tenant))
+	meta := &backend.BlockMeta{
+		BlockID:           uuid.New(),
+		TenantID:          p.tenant,
+		DedicatedColumns:  p.overrides.DedicatedColumns(p.tenant),
+		ReplicationFactor: 1,
+	}
+	block, err := p.wal.NewBlock(meta, model.CurrentEncoding)
 	if err != nil {
 		return err
 	}
