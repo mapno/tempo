@@ -142,7 +142,8 @@ func (s *queryRangeSharder) blockMetas(start, end int64, tenantID string) []*bac
 	metas := make([]*backend.BlockMeta, 0, len(allMetas)/50) // divide by 50 for luck
 	for _, m := range allMetas {
 		if m.StartTime.UnixNano() <= end &&
-			m.EndTime.UnixNano() >= start {
+			m.EndTime.UnixNano() >= start &&
+			m.ReplicationFactor == 1 { // Only consider blocks with replication factor 1
 			metas = append(metas, m)
 		}
 	}
