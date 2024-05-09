@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/grafana/tempo/tempodb"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/tempo/pkg/tempopb"
@@ -32,6 +33,22 @@ func (m *mockOverrides) MaxBytesPerTrace(string) int {
 func (m *mockOverrides) UnsafeQueryHints(string) bool {
 	return false
 }
+
+var _ tempodb.Writer = (*mockWriter)(nil)
+
+type mockWriter struct{}
+
+func (m *mockWriter) WriteBlock(context.Context, tempodb.WriteableBlock) error { return nil }
+
+func (m *mockWriter) CompleteBlock(context.Context, common.WALBlock) (common.BackendBlock, error) {
+	return nil, nil
+}
+
+func (m *mockWriter) CompleteBlockWithBackend(context.Context, common.WALBlock, backend.Reader, backend.Writer) (common.BackendBlock, error) {
+	return nil, nil
+}
+
+func (m *mockWriter) WAL() *wal.WAL { return nil }
 
 func TestProcessorDoesNotRace(t *testing.T) {
 	wal, err := wal.New(&wal.Config{
@@ -60,7 +77,7 @@ func TestProcessorDoesNotRace(t *testing.T) {
 		overrides = &mockOverrides{}
 	)
 
-	p, err := New(cfg, tenant, wal, overrides)
+	p, err := New(cfg, tenant, wal, &mockWriter{}, overrides)
 	require.NoError(t, err)
 
 	var (
@@ -111,6 +128,11 @@ func TestProcessorDoesNotRace(t *testing.T) {
 	go concurrent(func() {
 		err := p.completeBlock()
 		require.NoError(t, err, "completing block")
+	})
+
+	go concurrent(func() {
+		err := p.flushBlock()
+		require.NoError(t, err, "flushing blocks")
 	})
 
 	go concurrent(func() {
