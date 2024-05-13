@@ -269,20 +269,20 @@ func (g *Generator) createInstance(id string) (*instance, error) {
 
 		tracesWAL, err = tempodb_wal.New(&tracesWALCfg)
 		if err != nil {
-			wal.Close()
+			_ = wal.Close()
 			return nil, err
 		}
 	}
 
 	inst, err := newInstance(g.cfg, id, g.overrides, wal, reg, g.logger, tracesWAL, g.store)
 	if err != nil {
-		wal.Close()
+		_ = wal.Close()
 		return nil, err
 	}
 
 	err = g.reg.Register(reg)
 	if err != nil {
-		wal.Close()
+		inst.shutdown()
 		return nil, err
 	}
 

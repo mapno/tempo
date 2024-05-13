@@ -371,14 +371,11 @@ message QueryRangeRequest {
   string blockID = 8;
   uint32 startPage = 9;
   uint32 pagesToSearch = 10;
-  string encoding = 11;
-  uint32 indexPageSize = 12;
-  uint32 totalRecords = 13;
-  string dataEncoding = 14;
-  string version = 15;
-  uint64 size = 16; // total size of data file
-  uint32 footerSize = 17; // size of file footer (parquet)
-  repeated DedicatedColumn dedicatedColumns = 18;
+  string version = 11;
+  string encoding = 12;
+  uint64 size = 13; // total size of data file
+  uint32 footerSize = 14; // size of file footer (parquet)
+  repeated DedicatedColumn dedicatedColumns = 15;
 }
 
 message QueryRangeResponse {
