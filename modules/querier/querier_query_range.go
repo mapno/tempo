@@ -86,16 +86,16 @@ func (q *Querier) queryBlock(ctx context.Context, req *tempopb.QueryRangeRequest
 	}
 
 	meta := &backend.BlockMeta{
-		Version:          req.Version,
-		TenantID:         tenantID,
-		StartTime:        time.Unix(0, int64(req.Start)),
-		EndTime:          time.Unix(0, int64(req.End)),
-		Encoding:         enc,
+		Version:   req.Version,
+		TenantID:  tenantID,
+		StartTime: time.Unix(0, int64(req.Start)),
+		EndTime:   time.Unix(0, int64(req.End)),
+		Encoding:  enc,
+		// IndexPageSize:    req.IndexPageSize,
+		// TotalRecords:     req.TotalRecords,
+		BlockID: blockID,
+		// DataEncoding:     req.DataEncoding,
 		Size:             req.Size_,
-		IndexPageSize:    req.IndexPageSize,
-		TotalRecords:     req.TotalRecords,
-		BlockID:          blockID,
-		DataEncoding:     req.DataEncoding,
 		FooterSize:       req.FooterSize,
 		DedicatedColumns: dc,
 	}

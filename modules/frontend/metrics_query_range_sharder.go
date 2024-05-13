@@ -212,7 +212,6 @@ func (s *queryRangeSharder) buildBackendRequests(ctx context.Context, tenantID s
 			continue
 		}
 
-		blockID := m.BlockID.String()
 		for startPage := 0; startPage < int(m.TotalRecords); startPage += pages {
 			subR := parent.Clone(ctx)
 
@@ -224,21 +223,18 @@ func (s *queryRangeSharder) buildBackendRequests(ctx context.Context, tenantID s
 
 			subR = api.BuildQueryRangeRequest(subR, &tempopb.QueryRangeRequest{
 				Query: searchReq.Query,
-				// Start: searchReq.Start,
-				// End:   searchReq.End,
-				Step: searchReq.Step,
+				Start: searchReq.Start,
+				End:   searchReq.End,
+				Step:  searchReq.Step,
 				// ShardID:    uint32, // No sharding with RF=1
 				// ShardCount: uint32, // No sharding with RF=1
 				QueryMode: searchReq.QueryMode,
 				// New RF1 :fields,
-				BlockID:          blockID,
+				BlockID:          m.BlockID.String(),
 				StartPage:        uint32(startPage),
 				PagesToSearch:    uint32(pages),
-				Encoding:         m.Encoding.String(),
-				IndexPageSize:    m.IndexPageSize,
-				TotalRecords:     m.TotalRecords,
-				DataEncoding:     m.DataEncoding,
 				Version:          m.Version,
+				Encoding:         m.Encoding.String(),
 				Size_:            m.Size,
 				FooterSize:       m.FooterSize,
 				DedicatedColumns: dc,
