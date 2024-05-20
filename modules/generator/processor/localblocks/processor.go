@@ -327,6 +327,8 @@ func (p *Processor) completeBlock() error {
 
 	p.completeBlocks[newMeta.BlockID] = ingester.NewLocalBlock(ctx, newBlock, p.wal.LocalBackend())
 
+	metricCompletedBlocks.WithLabelValues(p.tenant).Inc()
+
 	err = b.Clear()
 	if err != nil {
 		return err
@@ -357,6 +359,7 @@ func (p *Processor) flushBlock() error {
 	if err != nil {
 		return err
 	}
+	metricFlushedBlocks.WithLabelValues(p.tenant).Inc()
 	return nil
 }
 
@@ -725,6 +728,8 @@ func (p *Processor) cutBlocks(immediate bool) error {
 	}
 
 	p.walBlocks[p.headBlock.BlockMeta().BlockID] = p.headBlock
+
+	metricCutBlocks.WithLabelValues(p.tenant).Inc()
 
 	err = p.resetHeadBlock()
 	if err != nil {
