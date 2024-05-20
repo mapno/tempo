@@ -10,9 +10,6 @@ import (
 	"github.com/go-kit/log" //nolint:all deprecated
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/grafana/dskit/user"
-	"github.com/opentracing/opentracing-go"
-	spanlog "github.com/opentracing/opentracing-go/log"
-
 	"github.com/grafana/tempo/modules/frontend/combiner"
 	"github.com/grafana/tempo/modules/frontend/pipeline"
 	"github.com/grafana/tempo/modules/overrides"
@@ -22,6 +19,7 @@ import (
 	"github.com/grafana/tempo/pkg/traceql"
 	"github.com/grafana/tempo/tempodb"
 	"github.com/grafana/tempo/tempodb/backend"
+	"github.com/opentracing/opentracing-go"
 )
 
 type queryRangeSharder struct {
@@ -111,12 +109,6 @@ func (s queryRangeSharder) RoundTrip(r *http.Request) (pipeline.Responses[combin
 	}
 
 	totalJobs, totalBlocks, totalBlockBytes := s.backendRequests(ctx, tenantID, r, *req, now, samplingRate, targetBytesPerRequest, interval, reqCh)
-
-	span.LogFields(
-		spanlog.Uint32("totalJobs", totalJobs),
-		spanlog.Uint32("totalBlocks", totalBlocks),
-		spanlog.Uint64("totalBlockBytes", totalBlockBytes),
-	)
 
 	// send a job to communicate the search metrics. this is consumed by the combiner to calculate totalblocks/bytes/jobs
 	var jobMetricsResponse pipeline.Responses[combiner.PipelineResponse]

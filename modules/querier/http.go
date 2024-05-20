@@ -464,6 +464,9 @@ func (q *Querier) QueryRangeHandler(w http.ResponseWriter, r *http.Request) {
 	if resp != nil && resp.Metrics != nil {
 		span.SetTag("inspectedBytes", resp.Metrics.InspectedBytes)
 		span.SetTag("inspectedSpans", resp.Metrics.InspectedSpans)
+		span.SetTag("totalJobs", resp.Metrics.TotalJobs)
+		span.SetTag("totalBlocks", resp.Metrics.TotalBlocks)
+		span.SetTag("totalBlockBytes", resp.Metrics.TotalBlockBytes)
 	}
 }
 
