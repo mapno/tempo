@@ -340,7 +340,7 @@ func (p *Processor) flushBlock() error {
 	var firstCompleteBlock *ingester.LocalBlock
 	p.blocksMtx.RLock()
 	for _, e := range p.completeBlocks {
-		if e.FlushedTime().IsZero() {
+		if !e.FlushedTime().IsZero() {
 			continue
 		}
 		firstCompleteBlock = e
