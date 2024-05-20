@@ -109,6 +109,9 @@ func (s queryRangeSharder) RoundTrip(r *http.Request) (pipeline.Responses[combin
 	}
 
 	totalJobs, totalBlocks, totalBlockBytes := s.backendRequests(ctx, tenantID, r, *req, now, samplingRate, targetBytesPerRequest, interval, reqCh)
+	span.SetTag("totalJobs", totalJobs)
+	span.SetTag("totalBlocks", totalBlocks)
+	span.SetTag("totalBlockBytes", totalBlockBytes)
 
 	// send a job to communicate the search metrics. this is consumed by the combiner to calculate totalblocks/bytes/jobs
 	var jobMetricsResponse pipeline.Responses[combiner.PipelineResponse]
