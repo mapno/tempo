@@ -57,6 +57,7 @@ func (q *Querier) TraceByIDHandler(w http.ResponseWriter, r *http.Request) {
 		ot_log.String("timeStart", fmt.Sprint(timeStart)),
 		ot_log.String("timeEnd", fmt.Sprint(timeEnd)))
 
+	// TODO: Exclude RF1 from this query
 	resp, err := q.FindTraceByID(ctx, &tempopb.TraceByIDRequest{
 		TraceID:    byteID,
 		BlockStart: blockStart,
@@ -450,6 +451,9 @@ func (q *Querier) QueryRangeHandler(w http.ResponseWriter, r *http.Request) {
 	span.SetTag("shardCount", req.ShardCount)
 	span.SetTag("step", time.Duration(req.Step))
 	span.SetTag("interval", time.Unix(0, int64(req.End)).Sub(time.Unix(0, int64(req.Start))))
+	span.SetTag("version", req.Version)
+	span.SetTag("encoding", req.Encoding)
+	span.SetTag("pagesToSearch", req.PagesToSearch)
 
 	resp, err = q.QueryRange(ctx, req)
 	if err != nil {
