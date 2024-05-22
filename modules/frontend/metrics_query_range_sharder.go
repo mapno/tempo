@@ -200,7 +200,7 @@ func (s *queryRangeSharder) backendRequests(ctx context.Context, tenantID string
 	return
 }
 
-func (s *queryRangeSharder) buildBackendRequests(ctx context.Context, tenantID string, parent *http.Request, searchReq tempopb.QueryRangeRequest, samplingRate float64, targetBytesPerRequest int, reqCh chan *http.Request, _ func(error)) {
+func (s *queryRangeSharder) buildBackendRequests(ctx context.Context, tenantID string, parent *http.Request, searchReq tempopb.QueryRangeRequest, _ float64, targetBytesPerRequest int, reqCh chan *http.Request, _ func(error)) {
 	defer close(reqCh)
 
 	metas := s.blockMetas(int64(searchReq.Start), int64(searchReq.End), tenantID)
