@@ -154,7 +154,7 @@ func (s *queryRangeSharder) blockMetas(start, end int64, tenantID string) []*bac
 	return metas
 }
 
-func (s *queryRangeSharder) backendRequests(ctx context.Context, tenantID string, parent *http.Request, searchReq tempopb.QueryRangeRequest, now time.Time, samplingRate float64, targetBytesPerRequest int, _ time.Duration, reqCh chan *http.Request) (totalJobs, totalBlocks uint32, totalBlockBytes uint64) {
+func (s *queryRangeSharder) backendRequests(ctx context.Context, tenantID string, parent *http.Request, searchReq tempopb.QueryRangeRequest, now time.Time, _ float64, targetBytesPerRequest int, _ time.Duration, reqCh chan *http.Request) (totalJobs, totalBlocks uint32, totalBlockBytes uint64) {
 	// request without start or end, search only in generator
 	if searchReq.Start == 0 || searchReq.End == 0 {
 		close(reqCh)
@@ -194,19 +194,14 @@ func (s *queryRangeSharder) backendRequests(ctx context.Context, tenantID string
 	}
 
 	go func() {
-		s.buildBackendRequests(ctx, tenantID, parent, backendReq, samplingRate, targetBytesPerRequest, reqCh, nil)
+		s.buildBackendRequests(ctx, tenantID, parent, backendReq, blocks, targetBytesPerRequest, reqCh, nil)
 	}()
 
 	return
 }
 
-func (s *queryRangeSharder) buildBackendRequests(ctx context.Context, tenantID string, parent *http.Request, searchReq tempopb.QueryRangeRequest, _ float64, targetBytesPerRequest int, reqCh chan *http.Request, _ func(error)) {
+func (s *queryRangeSharder) buildBackendRequests(ctx context.Context, tenantID string, parent *http.Request, searchReq tempopb.QueryRangeRequest, metas []*backend.BlockMeta, targetBytesPerRequest int, reqCh chan<- *http.Request, errFn func(error)) {
 	defer close(reqCh)
-
-	metas := s.blockMetas(int64(searchReq.Start), int64(searchReq.End), tenantID)
-	if len(metas) == 0 {
-		return
-	}
 
 	for _, m := range metas {
 		pages := pagesPerRequest(m, targetBytesPerRequest)
@@ -242,7 +237,7 @@ func (s *queryRangeSharder) buildBackendRequests(ctx context.Context, tenantID s
 				DedicatedColumns: dc,
 			})
 
-			prepareRequestForQueriers(subR, tenantID, parent.URL.Path, subR.URL.Query())
+			prepareRequestForQueriers(subR, tenantID, subR.URL.Path, subR.URL.Query())
 			// TODO: Handle sampling rate
 
 			select {
