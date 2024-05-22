@@ -103,7 +103,6 @@ func (q *Querier) queryBlock(ctx context.Context, req *tempopb.QueryRangeRequest
 	opts := common.DefaultSearchOptions()
 	opts.StartPage = int(req.StartPage)
 	opts.TotalPages = int(req.PagesToSearch)
-	opts.MaxBytes = q.limits.MaxBytesPerTrace(tenantID)
 
 	unsafe := q.limits.UnsafeQueryHints(tenantID)
 
@@ -125,7 +124,7 @@ func (q *Querier) queryBlock(ctx context.Context, req *tempopb.QueryRangeRequest
 	f := traceql.NewSpansetFetcherWrapper(func(ctx context.Context, req traceql.FetchSpansRequest) (traceql.FetchSpansResponse, error) {
 		return q.store.Fetch(ctx, meta, req, opts)
 	})
-	err = eval.Do(ctx, f, uint64(meta.StartTime.UnixNano()), uint64(meta.EndTime.UnixNano()))
+	err = eval.Do(ctx, f, 0, 0)
 	if err != nil {
 		return nil, err
 	}

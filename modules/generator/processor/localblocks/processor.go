@@ -350,6 +350,7 @@ func (p *Processor) completeBlock() error {
 
 	p.completeBlocks[newMeta.BlockID] = ingester.NewLocalBlock(ctx, newBlock, p.wal.LocalBackend())
 	metricCompletedBlocks.WithLabelValues(p.tenant).Inc()
+	level.Debug(p.logger).Log("msg", "completed block", "block", newMeta.BlockID.String())
 
 	// Queue for flushing
 	if _, err := p.flushqueue.Enqueue(newFlushOp(newMeta.BlockID)); err != nil {
@@ -379,6 +380,7 @@ func (p *Processor) flushBlock(id uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	level.Debug(p.logger).Log("msg", "flushed block", "block", id.String())
 	metricFlushedBlocks.WithLabelValues(p.tenant).Inc()
 	return nil
 }
