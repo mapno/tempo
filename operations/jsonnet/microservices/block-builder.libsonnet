@@ -31,8 +31,6 @@
     ]) +
     $.util.withResources($._config.block_builder.resources) +
     (if $._config.variables_expansion then container.withEnvMixin($._config.variables_expansion_env_mixin) else {}) +
-    container.mixin.resources.withRequestsMixin({ 'ephemeral-storage': $._config.block_builder.ephemeral_storage_request_size }) +
-    container.mixin.resources.withLimitsMixin({ 'ephemeral-storage': $._config.block_builder.ephemeral_storage_limit_size }) +
     $.util.readinessProbe +
     (if $._config.variables_expansion then container.withArgsMixin(['-config.expand-env=true']) else {}),
 
