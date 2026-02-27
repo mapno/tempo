@@ -96,25 +96,17 @@ func (cmd *patchMetaCmd) Run(opts *globalOptions) error {
 
 	// Check each faulty block's parquet data for populated columns beyond what meta declares
 	for _, meta := range faulty {
-		populated, err := countPopulatedDedicatedColumns(ctx, r, meta)
+		needsFix, err := hasUndeclaredPopulatedColumns(ctx, r, meta)
 		if err != nil {
 			fmt.Printf("  %s error: %v\n", meta.BlockID, err)
 			continue
 		}
 
 		metaCounts := dedicatedColumnCountsByScope(meta)
-		needsFix := false
-		for scope, popCount := range populated {
-			if popCount > metaCounts[scope] {
-				needsFix = true
-				break
-			}
-		}
-
 		if needsFix {
-			fmt.Printf("  %s NEEDS FIX meta=%v populated=%v\n", meta.BlockID, metaCounts, populated)
+			fmt.Printf("  %s NEEDS FIX start=%s end=%s meta=%v\n", meta.BlockID, meta.StartTime.String(), meta.EndTime.String(), metaCounts)
 		} else {
-			fmt.Printf("  %s OK meta=%v populated=%v\n", meta.BlockID, metaCounts, populated)
+			fmt.Printf("  %s OK start=%s end=%s meta=%v\n", meta.BlockID, meta.StartTime.String(), meta.EndTime.String(), metaCounts)
 		}
 	}
 
@@ -126,6 +118,20 @@ func dedicatedColumnCountsByScope(meta *backend.BlockMeta) map[backend.Dedicated
 	counts := make(map[backend.DedicatedColumnScope]int)
 	for _, col := range meta.DedicatedColumns {
 		counts[col.Scope]++
+	}
+	return counts
+}
+
+type scopeType struct {
+	scope  backend.DedicatedColumnScope
+	colTyp backend.DedicatedColumnType
+}
+
+// dedicatedColumnCountsByScopeAndType returns a map of (scope, type) -> count.
+func dedicatedColumnCountsByScopeAndType(meta *backend.BlockMeta) map[scopeType]int {
+	counts := make(map[scopeType]int)
+	for _, col := range meta.DedicatedColumns {
+		counts[scopeType{col.Scope, col.Type}]++
 	}
 	return counts
 }
@@ -142,36 +148,33 @@ func maybeFaultyBlock(meta *backend.BlockMeta, minPerScope int) bool {
 	return len(counts) == 0
 }
 
-// dedicatedColumnPaths returns the scope->type->paths mapping for vParquet4 blocks.
-func dedicatedColumnPaths() map[backend.DedicatedColumnScope]map[backend.DedicatedColumnType][]string {
-	return vparquet4.DedicatedResourceColumnPaths
-}
-
-// countPopulatedDedicatedColumns opens the parquet file for a block and counts how many
-// dedicated column slots per scope actually contain non-null data.
-func countPopulatedDedicatedColumns(ctx context.Context, r backend.Reader, meta *backend.BlockMeta) (map[backend.DedicatedColumnScope]int, error) {
-	paths := dedicatedColumnPaths()
-
+// hasUndeclaredPopulatedColumns opens the parquet file for a block and checks whether any
+// dedicated column slots beyond what the meta declares contain non-null data.
+// For example, if the meta declares 5 resource-string columns (String01-String05),
+// this checks if String06-String10 have any non-null data.
+func hasUndeclaredPopulatedColumns(ctx context.Context, r backend.Reader, meta *backend.BlockMeta) (bool, error) {
 	rr := vparquet4.NewBackendReaderAt(ctx, r, vparquet4.DataFileName, meta)
 	br := tempo_io.NewBufferedReaderAt(rr, int64(meta.Size_), 2*1024*1024, 64)
 	pf, err := parquet.OpenFile(br, int64(meta.Size_), parquet.SkipBloomFilters(true))
 	if err != nil {
-		return nil, fmt.Errorf("opening parquet file: %w", err)
+		return false, fmt.Errorf("opening parquet file: %w", err)
 	}
 
-	populated := make(map[backend.DedicatedColumnScope]int)
+	metaCounts := dedicatedColumnCountsByScopeAndType(meta)
 
-	for scope, byType := range paths {
-		for _, columnPaths := range byType {
-			for _, colPath := range columnPaths {
-				if hasNonNullData(pf, colPath) {
-					populated[scope]++
+	for scope, byType := range vparquet4.DedicatedResourceColumnPaths {
+		for colType, columnPaths := range byType {
+			declared := metaCounts[scopeType{scope, colType}]
+			// Only check columns beyond what the meta declares
+			for i := declared; i < len(columnPaths); i++ {
+				if hasNonNullData(pf, columnPaths[i]) {
+					return true, nil
 				}
 			}
 		}
 	}
 
-	return populated, nil
+	return false, nil
 }
 
 // hasNonNullData checks if a parquet column has any non-null data by inspecting
