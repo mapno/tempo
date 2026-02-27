@@ -96,6 +96,10 @@ var cli struct {
 	Suggest struct {
 		Columns suggestColumnsCmd `cmd:"" help:"Suggest columns for a tenant"`
 	} `cmd:""`
+
+	Patch struct {
+		Meta patchMetaCmd `cmd:"" help:"Patch block meta.json for blocks in a time range"`
+	} `cmd:""`
 }
 
 func main() {
