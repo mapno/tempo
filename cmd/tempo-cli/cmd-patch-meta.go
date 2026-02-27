@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -19,13 +20,22 @@ import (
 type patchMetaCmd struct {
 	backendOptions
 
-	TenantID string `arg:"" help:"tenant ID to patch blocks for"`
-	Start    string `arg:"" help:"start time in RFC3339 (e.g. 2006-01-02T15:04:05Z07:00) or relative (e.g. now-1h) format"`
-	End      string `arg:"" help:"end time in RFC3339 (e.g. 2006-01-02T15:04:05Z07:00) or relative (e.g. now) format"`
+	TenantID        string `arg:"" help:"tenant ID to patch blocks for"`
+	Start           string `arg:"" help:"start time in RFC3339 (e.g. 2006-01-02T15:04:05Z07:00) or relative (e.g. now-1h) format"`
+	End             string `arg:"" help:"end time in RFC3339 (e.g. 2006-01-02T15:04:05Z07:00) or relative (e.g. now) format"`
+	DedicatedColCfg string `arg:"" help:"dedicated columns config as JSON array"`
 }
 
 func (cmd *patchMetaCmd) Run(opts *globalOptions) error {
-	r, _, _, err := loadBackend(&cmd.backendOptions, opts)
+	var newDedicatedColumns backend.DedicatedColumns
+	if err := json.Unmarshal([]byte(cmd.DedicatedColCfg), &newDedicatedColumns); err != nil {
+		return fmt.Errorf("parsing dedicated columns JSON: %w", err)
+	}
+	fmt.Println("New dedicated columns config:", len(newDedicatedColumns), "columns")
+	b, _ := newDedicatedColumns.Marshal()
+	fmt.Println(string(b))
+	
+	r, w, _, err := loadBackend(&cmd.backendOptions, opts)
 	if err != nil {
 		return err
 	}
@@ -103,11 +113,27 @@ func (cmd *patchMetaCmd) Run(opts *globalOptions) error {
 		}
 
 		metaCounts := dedicatedColumnCountsByScope(meta)
-		if needsFix {
-			fmt.Printf("  %s NEEDS FIX start=%s end=%s meta=%v\n", meta.BlockID, meta.StartTime.String(), meta.EndTime.String(), metaCounts)
-		} else {
+		if !needsFix {
 			fmt.Printf("  %s OK start=%s end=%s meta=%v\n", meta.BlockID, meta.StartTime.String(), meta.EndTime.String(), metaCounts)
+			continue
 		}
+
+		fmt.Printf("  %s NEEDS FIX start=%s end=%s meta=%v\n", meta.BlockID, meta.StartTime.String(), meta.EndTime.String(), metaCounts)
+
+		// Backup the existing meta.json
+		if err := backupBlockMeta(ctx, r, w, meta); err != nil {
+			fmt.Printf("  %s backup error: %v\n", meta.BlockID, err)
+			continue
+		}
+		fmt.Printf("  %s backed up meta.json -> meta.json.backup\n", meta.BlockID)
+
+		// Patch the dedicated columns and write the updated meta
+		meta.DedicatedColumns = newDedicatedColumns
+		if err := w.WriteBlockMeta(ctx, meta); err != nil {
+			fmt.Printf("  %s write error: %v\n", meta.BlockID, err)
+			continue
+		}
+		fmt.Printf("  %s patched meta.json with %d dedicated columns\n", meta.BlockID, len(newDedicatedColumns))
 	}
 
 	return nil
@@ -175,6 +201,23 @@ func hasUndeclaredPopulatedColumns(ctx context.Context, r backend.Reader, meta *
 	}
 
 	return false, nil
+}
+
+const backupMetaName = "meta.json.backup"
+
+// backupBlockMeta reads the raw meta.json and writes it as meta.json.backup.
+func backupBlockMeta(ctx context.Context, r backend.Reader, w backend.Writer, meta *backend.BlockMeta) error {
+	metaBytes, err := r.Read(ctx, backend.MetaName, uuid.UUID(meta.BlockID), meta.TenantID, nil)
+	if err != nil {
+		return fmt.Errorf("reading meta.json: %w", err)
+	}
+
+	err = w.Write(ctx, backupMetaName, uuid.UUID(meta.BlockID), meta.TenantID, metaBytes, nil)
+	if err != nil {
+		return fmt.Errorf("writing meta.json.backup: %w", err)
+	}
+
+	return nil
 }
 
 // hasNonNullData checks if a parquet column has any non-null data by inspecting
