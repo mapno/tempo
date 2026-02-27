@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/parquet-go/parquet-go"
@@ -20,21 +22,22 @@ import (
 type patchMetaCmd struct {
 	backendOptions
 
-	TenantID        string `arg:"" help:"tenant ID to patch blocks for"`
 	Start           string `arg:"" help:"start time in RFC3339 (e.g. 2006-01-02T15:04:05Z07:00) or relative (e.g. now-1h) format"`
 	End             string `arg:"" help:"end time in RFC3339 (e.g. 2006-01-02T15:04:05Z07:00) or relative (e.g. now) format"`
-	DedicatedColCfg string `arg:"" help:"dedicated columns config as JSON array"`
+	TenantID        string `help:"tenant ID to patch blocks for (requires --dedicated-col-cfg)" short:"t"`
+	DedicatedColCfg string `help:"dedicated columns config as JSON array (requires --tenant-id)" short:"d"`
+	PatchCfgFile    string `help:"path to JSON config file mapping tenant IDs to dedicated columns" short:"p" type:"existingfile"`
 }
 
+// tenantDedicatedColumns maps tenant ID -> dedicated columns config.
+type tenantDedicatedColumns map[string]backend.DedicatedColumns
+
 func (cmd *patchMetaCmd) Run(opts *globalOptions) error {
-	var newDedicatedColumns backend.DedicatedColumns
-	if err := json.Unmarshal([]byte(cmd.DedicatedColCfg), &newDedicatedColumns); err != nil {
-		return fmt.Errorf("parsing dedicated columns JSON: %w", err)
+	tenantConfigs, err := cmd.loadTenantConfigs()
+	if err != nil {
+		return err
 	}
-	fmt.Println("New dedicated columns config:", len(newDedicatedColumns), "columns")
-	b, _ := newDedicatedColumns.Marshal()
-	fmt.Println(string(b))
-	
+
 	r, w, _, err := loadBackend(&cmd.backendOptions, opts)
 	if err != nil {
 		return err
@@ -51,7 +54,77 @@ func (cmd *patchMetaCmd) Run(opts *globalOptions) error {
 
 	ctx := context.Background()
 
-	blockIDs, _, err := r.Blocks(ctx, cmd.TenantID)
+	for tenantID, newDedicatedColumns := range tenantConfigs {
+		fmt.Printf("\n=== Tenant: %s (%d dedicated columns) ===\n", tenantID, len(newDedicatedColumns))
+
+		if err := cmd.processTenant(ctx, r, w, tenantID, startTime, endTime, newDedicatedColumns); err != nil {
+			fmt.Printf("  tenant %s error: %v\n", tenantID, err)
+			continue
+		}
+	}
+
+	return nil
+}
+
+// loadTenantConfigs parses tenant -> dedicated columns from either CLI args or a config file.
+func (cmd *patchMetaCmd) loadTenantConfigs() (tenantDedicatedColumns, error) {
+	hasInline := cmd.TenantID != "" || cmd.DedicatedColCfg != ""
+	hasFile := cmd.PatchCfgFile != ""
+
+	if hasInline && hasFile {
+		return nil, fmt.Errorf("use either --tenant-id/--dedicated-col-cfg or --patch-cfg-file, not both")
+	}
+	if !hasInline && !hasFile {
+		return nil, fmt.Errorf("provide either --tenant-id and --dedicated-col-cfg, or --patch-cfg-file")
+	}
+
+	if hasFile {
+		return loadPatchCfgFile(cmd.PatchCfgFile)
+	}
+
+	// Inline mode
+	if cmd.TenantID == "" {
+		return nil, fmt.Errorf("--tenant-id is required when using --dedicated-col-cfg")
+	}
+	if cmd.DedicatedColCfg == "" {
+		return nil, fmt.Errorf("--dedicated-col-cfg is required when using --tenant-id")
+	}
+
+	var cols backend.DedicatedColumns
+	if err := json.Unmarshal([]byte(cmd.DedicatedColCfg), &cols); err != nil {
+		return nil, fmt.Errorf("parsing dedicated columns JSON: %w", err)
+	}
+
+	return tenantDedicatedColumns{cmd.TenantID: cols}, nil
+}
+
+func loadPatchCfgFile(path string) (tenantDedicatedColumns, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading config file: %w", err)
+	}
+
+	var cfg tenantDedicatedColumns
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parsing config file: %w", err)
+	}
+
+	if len(cfg) == 0 {
+		return nil, fmt.Errorf("config file contains no tenant entries")
+	}
+
+	return cfg, nil
+}
+
+func (cmd *patchMetaCmd) processTenant(
+	ctx context.Context,
+	r backend.Reader,
+	w backend.Writer,
+	tenantID string,
+	startTime, endTime time.Time,
+	newDedicatedColumns backend.DedicatedColumns,
+) error {
+	blockIDs, _, err := r.Blocks(ctx, tenantID)
 	if err != nil {
 		return err
 	}
@@ -67,7 +140,7 @@ func (cmd *patchMetaCmd) Run(opts *globalOptions) error {
 		go func(id2 uuid.UUID) {
 			defer wg.Done()
 
-			meta, err := r.BlockMeta(ctx, id2, cmd.TenantID)
+			meta, err := r.BlockMeta(ctx, id2, tenantID)
 			if errors.Is(err, backend.ErrDoesNotExist) {
 				return
 			}
