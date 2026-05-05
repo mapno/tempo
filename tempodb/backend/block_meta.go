@@ -6,11 +6,11 @@ import (
 	"slices"
 	"time"
 
-	"github.com/bytedance/sonic"
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
 	"github.com/grafana/tempo/pkg/tempopb"
 	"github.com/grafana/tempo/pkg/traceql"
+	"github.com/grafana/tempo/pkg/util/jsonx"
 )
 
 // DedicatedColumnType is the type of the values in the dedicated attribute column. Only 'string' is supported.
@@ -195,13 +195,13 @@ func (dc *DedicatedColumn) MarshalJSON() ([]byte, error) {
 	if cpy.Type == DefaultDedicatedColumnType {
 		cpy.Type = ""
 	}
-	return sonic.Marshal(&cpy)
+	return jsonx.Marshal(&cpy)
 }
 
 func (dc *DedicatedColumn) UnmarshalJSON(b []byte) error {
 	type dcAlias DedicatedColumn // alias required to avoid recursive calls of UnmarshalJSON
 
-	err := sonic.Unmarshal(b, (*dcAlias)(dc))
+	err := jsonx.Unmarshal(b, (*dcAlias)(dc))
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func (dcs *DedicatedColumns) UnmarshalJSON(b []byte) error {
 	}
 
 	type dcsAlias DedicatedColumns // alias required to avoid recursive calls of UnmarshalJSON
-	err := sonic.Unmarshal(b, (*dcsAlias)(dcs))
+	err := jsonx.Unmarshal(b, (*dcsAlias)(dcs))
 	if err != nil {
 		return err
 	}
@@ -427,7 +427,7 @@ func (dcs DedicatedColumns) Marshal() ([]byte, error) {
 	}
 
 	// NOTE: The json bytes interned in a map to avoid re-unmarshalling the same byte slice.
-	return sonic.Marshal(dcs)
+	return jsonx.Marshal(dcs)
 }
 
 func (dcs DedicatedColumns) MarshalTo(data []byte) (n int, err error) {
@@ -446,7 +446,7 @@ func (dcs *DedicatedColumns) Unmarshal(data []byte) error {
 	}
 
 	// NOTE: The json bytes interned in a map to avoid re-unmarshalling the same byte slice.
-	return sonic.Unmarshal(data, &dcs)
+	return jsonx.Unmarshal(data, &dcs)
 }
 
 func (b *CompactedBlockMeta) UnmarshalJSON(data []byte) error {
