@@ -628,7 +628,14 @@ func (c *SyncIterator) SeekTo(to RowNumber, definitionLevel int) (*IteratorResul
 	if !rn.Valid() {
 		return nil, nil
 	}
-	return c.makeResult(rn, v), nil
+
+	if (c.filter == nil || c.filter.KeepValue(*v)) && (c.sampler == nil || c.sampler.Sample()) {
+		return c.makeResult(rn, v), nil
+	}
+
+	// The value at the seek target didn't pass the filter or sampler, continue
+	// as a normal filtered read.
+	return c.Next()
 }
 
 func (c *SyncIterator) popRowGroup() (pq.RowGroup, RowNumber, RowNumber) {
@@ -847,10 +854,11 @@ func (c *SyncIterator) next() (RowNumber, *pq.Value, error) {
 	}
 }
 
-// nextSeek is like next but for use while seeking: values before the seek
-// target are discarded without evaluating the filter, since SeekTo drops
-// them regardless of the filter's decision. Values at or past the target are
-// filtered as usual.
+// nextSeek is like next but for use while seeking: it returns the first
+// value at or past the seek target without evaluating the filter. Values
+// before the target are discarded unfiltered, since SeekTo drops them
+// regardless of the filter's decision. The caller is responsible for
+// filtering the returned value.
 func (c *SyncIterator) nextSeek(to RowNumber, definitionLevel int) (RowNumber, *pq.Value, error) {
 	for {
 		// Consume current buffer until empty
@@ -864,14 +872,6 @@ func (c *SyncIterator) nextSeek(to RowNumber, definitionLevel int) (RowNumber, *
 			c.currPageN++
 
 			if CompareRowNumbers(definitionLevel, c.curr, to) < 0 {
-				continue
-			}
-
-			if c.filter != nil && !c.filter.KeepValue(*v) {
-				continue
-			}
-
-			if c.sampler != nil && !c.sampler.Sample() {
 				continue
 			}
 
